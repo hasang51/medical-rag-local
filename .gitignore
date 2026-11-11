@@ -14,7 +14,7 @@ wheels/
 data/runtime/
 .pytest_cache/
 
-# IDE ve yerel ajan notları (SSH akışı burada kalır)
+# IDE ve yerel ajan notları
 .cursor/
 
 # Frontend
@@ -26,3 +26,5 @@ frontend/dist/
 *.pem
 id_ed25519
 id_ed25519.pub
+runpod_ed25519
+runpod_ed25519.pub

@@ -1,6 +1,6 @@
 # Medical RAG — Cursor açılış sırası
 
-Host ve SSH portunu her seferinde RunPod panelinden alın. Eski pod adresini yeniden kullanmayın.
+Host ve SSH portunu her seferinde RunPod panelinden alın. Eski pod adresini yeniden kullanmayın. Pod adresi ve SSH parolası bu dosyaya yazılmaz.
 
 Anahtar: `~\.ssh\runpod_ed25519`. Parolayı terminale siz yazın; kaydetmeyin, komuta koymayın.
 

@@ -1,0 +1,28 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Yerel gizler ve çalışma çıktıları
+.env
+data/runtime/
+.pytest_cache/
+
+# IDE ve yerel ajan notları (SSH akışı burada kalır)
+.cursor/
+
+# Frontend
+node_modules/
+frontend/dist/
+
+# Anahtar ve model ağırlığı bu depoya girmez
+*.gguf
+*.pem
+id_ed25519
+id_ed25519.pub

@@ -1,0 +1,1 @@
+Eğitim sözlüğü. Kan basıncı, kanın atardamar duvarına uyguladığı kuvvettir. Sistolik değer kalbin kasılma anındaki basıncı, diyastolik değer kalbin gevşeme anındaki basıncı tanımlar. Kişisel ölçüm yorumu yoktur.

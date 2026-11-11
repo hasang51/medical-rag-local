@@ -1,0 +1,1 @@
+Eğitim sözlüğü. Diyabet, glikozun uzun süre yüksek kalmasıyla tanımlanan bir metabolizma kavramıdır. Tip 1 ve tip 2 başlangıç biçimini ayıran sınıflardır. İnsülin, glikozun hücreye alınmasında görevli hormondur. Doz yoktur.

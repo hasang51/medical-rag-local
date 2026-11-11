@@ -1,0 +1,74 @@
+[
+  {
+    "id": "q01",
+    "question": "Sistolik ve diyastolik kan basıncı ne anlatır?",
+    "expected_chunk_id": "kan-basinci-0",
+    "expect_hit": true
+  },
+  {
+    "id": "q02",
+    "question": "Nabız atardamar hızı nedir?",
+    "expected_chunk_id": "nabiz-0",
+    "expect_hit": true
+  },
+  {
+    "id": "q03",
+    "question": "Hipertermi ve vücut sıcaklığı ne demektir?",
+    "expected_chunk_id": "ates-0",
+    "expect_hit": true
+  },
+  {
+    "id": "q04",
+    "question": "El hijyeni sabun ve ovalama ne demektir?",
+    "expected_chunk_id": "el-hijyeni-0",
+    "expect_hit": true
+  },
+  {
+    "id": "q05",
+    "question": "Aşı antijen ve bağışıklama ne demektir?",
+    "expected_chunk_id": "asi-0",
+    "expect_hit": true
+  },
+  {
+    "id": "q06",
+    "question": "Diyabet glikoz tip 1 ve tip 2 ne demektir?",
+    "expected_chunk_id": "diyabet-0",
+    "expect_hit": true
+  },
+  {
+    "id": "q07",
+    "question": "Astım hırıltı ve bronş daralması ne demektir?",
+    "expected_chunk_id": "astim-0",
+    "expect_hit": true
+  },
+  {
+    "id": "q08",
+    "question": "ABO ve Rh alyuvar belirteçleri neyi ayırır?",
+    "expected_chunk_id": "kan-gruplari-0",
+    "expect_hit": true
+  },
+  {
+    "id": "q09",
+    "question": "Alveol ve soluk borusu ne işe yarar?",
+    "expected_chunk_id": "solunum-0",
+    "expect_hit": true
+  },
+  {
+    "id": "q10",
+    "question": "Peristaltizm mide ve ince bağırsak ne demektir?",
+    "expected_chunk_id": "sindirim-0",
+    "expect_hit": true
+  },
+  {
+    "id": "q11",
+    "question": "İstanbul'da yarın hava durumu nasıl olacak?",
+    "expected_chunk_id": null,
+    "expect_hit": false
+  },
+  {
+    "id": "q12",
+    "question": "Kuantum bilgisayar kapısı nedir?",
+    "expected_chunk_id": null,
+    "expect_hit": false
+  }
+]

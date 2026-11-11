@@ -15,6 +15,17 @@ tarayıcı → Vite 127.0.0.1:5173
 
 Arayüz Ollama’ya bağlanmaz. FastAPI, Ollama adresinin `127.0.0.1` veya `localhost` dışında olmasını reddeder. GPU denemesinde uzak Ollama’ya giden yol yerel SSH tünelidir: `127.0.0.1:11435` → uzak `127.0.0.1:11434`. Windows üzerindeki yerel Ollama `11434` portundadır; tünel ile karıştırılmaz.
 
+## Dizin
+
+| Yol | İş |
+|---|---|
+| `src/medical_rag` | FastAPI, BM25, güvenlik sözleşmesi, Ollama istemcisi |
+| `data/corpus` | Sentetik Türkçe sözlük |
+| `data/eval/questions.json` | Değerlendirme soruları |
+| `frontend` | Tek turlu klinik arayüz. Vite, API’yi proxy eder |
+| `tests` | API, getirici ve rapor testleri |
+| `CALISTIRMA.md` | Tünel, API ve arayüz açılış sırası |
+
 Varsayılan model `gemma4:e4b`. 26B hedefi ortam değişkeniyle seçilir: `gemma4:26b-a4b-it-q4_K_M`. Üretim sınırı `num_ctx=2048`, `num_predict=128`, `temperature=0.2`, `think=false`. Akış yoktur. Ollama istemcisi aynı anda tek üretim tutar.
 
 ## API

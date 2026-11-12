@@ -131,46 +131,6 @@ class IntentRouter:
 
         is_personal_cue = bool(_PERSONAL_INTENT_RE.search(folded))
         history = parse_history_query(folded)
-        # #region agent log
-        try:
-            import json as _json
-            import time as _time
-
-            with open(
-                r"c:\Projects\medical-rag-local\.cursor\debug-36fe44.log",
-                "a",
-                encoding="utf-8",
-            ) as _fh:
-                _fh.write(
-                    _json.dumps(
-                        {
-                            "sessionId": "36fe44",
-                            "hypothesisId": "D",
-                            "location": "intent_router.py:route",
-                            "message": "concept linker vs history prefixes",
-                            "data": {
-                                "folded": folded,
-                                "concepts": [
-                                    {
-                                        "id": c.concept_id,
-                                        "term": c.preferred_term,
-                                        "phrase": c.matched_phrase,
-                                        "source": c.match_source,
-                                    }
-                                    for c in linked_concepts
-                                ],
-                                "historyActive": history.active,
-                                "historyPrefixes": list(history.code_prefixes),
-                            },
-                            "timestamp": int(_time.time() * 1000),
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
 
         # Tamamen alakasız soruları (ör. hava durumu, kuantum kapısı) erken ele
         if (

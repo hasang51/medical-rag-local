@@ -8,12 +8,17 @@ from medical_rag.rag.retriever import Bm25Retriever
 from types import SimpleNamespace
 
 from medical_rag.safety.policy import ABSTAIN_TEXT, enforce_twin_contract
+from medical_rag.rag.retriever import ScoredChunk
+from medical_rag.twin.cco_adapter import AdaptedFact, AdaptedPatientBundle
 from medical_rag.twin.clinical_history import (
     classify_history_search,
     compose_coded_history_answer,
     parse_history_query,
+    select_supporting_facts,
 )
+from medical_rag.twin.evidence_builder import EvidenceBuilder
 from medical_rag.twin.service import DigitalTwinService
+from tests.fakes import FakeOllama, ScriptedRetriever
 
 
 def test_history_cues_select_a_chapter_without_matching_current_metrics() -> None:
@@ -105,6 +110,17 @@ def test_history_search_keeps_old_coded_diagnoses_in_the_prompt(tmp_path: Path) 
         assert "HISTORY-EMPTY" not in positive_text
         assert "R11" not in positive_text
         assert "J06" not in positive_text
+        positive_ids = [item.citation_id for item in gland_positive.evidence.patient_cco]
+        assert "CCO:oracle-pilot-018:F499" not in positive_ids
+        assert "CCO:oracle-pilot-018:F1105" not in positive_ids
+        assert gland_positive.evidence.general_knowledge == []
+
+        hypo_ids = [item.citation_id for item in thyroid.evidence.patient_cco]
+        assert "CCO:oracle-pilot-018:F442" in hypo_ids
+        assert "CCO:oracle-pilot-018:F499" not in hypo_ids
+        assert "CCO:oracle-pilot-018:F1105" not in hypo_ids
+        assert thyroid.evidence.general_knowledge == []
+        assert "GENEL:bagisiklik-0" not in thyroid.evidence.allowed_citation_ids
 
         gland_negative = twin.prepare_turn(
             "Geçmişimde tiroit hastalığı var mı?",
@@ -270,5 +286,305 @@ def test_exact_sleep_question_stays_on_the_metric_path(tmp_path: Path) -> None:
         )
         assert prepared.plan.intent != "clinical_history_search"
         assert "HISTORY-SCOPE" not in prepared.rendered_context
+    finally:
+        twin.close()
+
+
+def _fact(**overrides: object) -> AdaptedFact:
+    base: dict[str, object] = {
+        "case_id": "oracle-pilot-018",
+        "fact_alias": "F1",
+        "source_index": 1,
+        "family": "diagnosis",
+        "collection_kind": "facts",
+        "definition": "diagnosis.recorded-item|1",
+        "canonical_id": "diagnosis.recorded-item",
+        "definition_version": "1",
+        "evaluation_key": "code:icd-10:E03",
+        "evaluation_status": "success",
+        "value_type": "coded",
+        "amount": None,
+        "unit": None,
+        "code_system": "icd-10",
+        "code": "E03",
+        "display_text": "Hipotiroidizm, diğer",
+        "narrative_sections": {},
+        "clinical_attributes": {"type": "preliminary", "visitDate": "2026-04-08"},
+        "truncated": False,
+        "occurred_from": "2026-04-08T10:58:00+03:00",
+        "occurred_to": "2026-04-08T10:58:00+03:00",
+        "recorded_at": "2026-04-08T11:00:00+03:00",
+        "valid_from": "2026-04-08T10:58:00+03:00",
+        "valid_until": None,
+        "export_status": "active",
+        "superseded_at": None,
+        "supersedes_fact_alias": None,
+        "supersede_reason": None,
+        "engine_version": "1",
+        "missing_reasons": [],
+        "source_issues": [],
+        "evidence": [],
+        "comparisons": [],
+    }
+    base.update(overrides)
+    return AdaptedFact(**base)  # type: ignore[arg-type]
+
+
+def test_same_day_visit_is_not_enough_to_support_a_coded_diagnosis() -> None:
+    diagnosis = _fact(fact_alias="F442")
+    abdomen = _fact(
+        fact_alias="F499",
+        family="imaging",
+        canonical_id="imaging.recorded-item",
+        definition="imaging.recorded-item|1",
+        value_type="narrative",
+        code_system=None,
+        code=None,
+        display_text="Üst abdomen ultrasonografisi",
+        clinical_attributes={"examName": "Üst abdomen ultrasonografisi", "visitDate": "2026-04-08"},
+    )
+    visit_note = _fact(
+        fact_alias="F1105",
+        family="visit",
+        canonical_id="visit.examination",
+        definition="visit.examination|1",
+        value_type="narrative",
+        code_system=None,
+        code=None,
+        display_text="Poliklinik muayene notu",
+        narrative_sections={"not": "Aynı vizit. Karın muayenesi olağan. Ek yakınma yok."},
+        clinical_attributes={"visitDate": "2026-04-08"},
+    )
+    thyroid_scan = _fact(
+        fact_alias="F500",
+        family="imaging",
+        canonical_id="imaging.recorded-item",
+        definition="imaging.recorded-item|1",
+        value_type="narrative",
+        code_system=None,
+        code=None,
+        display_text="Tiroid ultrasonografisi",
+        clinical_attributes={"examName": "Tiroid ultrasonografisi"},
+        occurred_from="2025-01-02T09:00:00+03:00",
+        occurred_to="2025-01-02T09:00:00+03:00",
+    )
+    tsh = _fact(
+        fact_alias="F501",
+        family="lab",
+        canonical_id="lab.tsh",
+        definition="lab.tsh|1",
+        value_type="quantity",
+        code_system=None,
+        code=None,
+        display_text="TSH",
+        amount=6.2,
+        unit="mIU/L",
+        occurred_from="2025-11-01T08:00:00+03:00",
+        occurred_to="2025-11-01T08:00:00+03:00",
+    )
+    concepts = parse_history_query("hipotiroidi tanısı daha önce olmuş mu?").concepts
+    selected = select_supporting_facts(
+        [abdomen, visit_note, thyroid_scan, tsh],
+        concepts,
+        coded_facts=[diagnosis],
+    )
+    aliases = [fact.fact_alias for fact in selected]
+    assert aliases == ["F500", "F501"]
+    assert select_supporting_facts(
+        [abdomen, visit_note],
+        concepts,
+        coded_facts=[],
+    ) == []
+
+
+def test_history_sources_keep_coded_diagnosis_and_real_support(tmp_path: Path) -> None:
+    bundle = AdaptedPatientBundle(
+        case_id="oracle-pilot-018",
+        subject_fingerprint="synthetic",
+        evaluated_at="2026-11-01T00:00:00+03:00",
+        exported_at="2026-11-01T00:00:00+03:00",
+        cco_as_of="2026-11-01T00:00:00+03:00",
+        export_scope="test",
+        has_structured_data=True,
+        total_rows=4,
+        value_fact_count=4,
+        missing_result_count=0,
+        families=["diagnosis", "imaging", "visit", "lab"],
+        facts=[
+            _fact(fact_alias="F442", source_index=442),
+            _fact(
+                fact_alias="F499",
+                source_index=499,
+                family="imaging",
+                canonical_id="imaging.recorded-item",
+                definition="imaging.recorded-item|1",
+                value_type="narrative",
+                code_system=None,
+                code=None,
+                display_text="Üst abdomen ultrasonografisi",
+                clinical_attributes={
+                    "examName": "Üst abdomen ultrasonografisi",
+                    "visitDate": "2026-04-08",
+                },
+            ),
+            _fact(
+                fact_alias="F1105",
+                source_index=1105,
+                family="visit",
+                canonical_id="visit.examination",
+                definition="visit.examination|1",
+                value_type="narrative",
+                code_system=None,
+                code=None,
+                display_text="Poliklinik muayene notu",
+                narrative_sections={"not": "Aynı vizit. Karın muayenesi olağan. Ek yakınma yok."},
+                clinical_attributes={"visitDate": "2026-04-08"},
+            ),
+            _fact(
+                fact_alias="F500",
+                source_index=500,
+                family="imaging",
+                canonical_id="imaging.recorded-item",
+                definition="imaging.recorded-item|1",
+                value_type="narrative",
+                code_system=None,
+                code=None,
+                display_text="Tiroid ultrasonografisi",
+                clinical_attributes={"examName": "Tiroid ultrasonografisi"},
+                occurred_from="2025-01-02T09:00:00+03:00",
+                occurred_to="2025-01-02T09:00:00+03:00",
+            ),
+        ],
+        glossary=[],
+        narrative_sections=[],
+    )
+    missing_package = tmp_path / "missing-package"
+    twin = DigitalTwinService(
+        db_path=tmp_path / "support.db",
+        cco_package_dir=missing_package,
+        snomed_package_dir=missing_package,
+        eager_load=True,
+    )
+    retriever = ScriptedRetriever(
+        [
+            ScoredChunk(
+                id="bagisiklik-0",
+                text="Eğitim sözlüğü. Hastalık tanısı değildir.",
+                source="bagisiklik.md",
+                score=4.0,
+            )
+        ]
+    )
+    try:
+        assert twin._repo is not None
+        twin._repo.ingest_bundle(bundle)
+        prepared = twin.prepare_turn(
+            "Hipotiroidi tanısı daha önce olmuş mu?",
+            case_id="oracle-pilot-018",
+            retriever=retriever,
+        )
+        ids = [item.citation_id for item in prepared.evidence.patient_cco]
+        assert prepared.plan.intent == "clinical_history_search"
+        assert "CCO:oracle-pilot-018:F442" in ids
+        assert "CCO:oracle-pilot-018:F500" in ids
+        assert "CCO:oracle-pilot-018:F499" not in ids
+        assert "CCO:oracle-pilot-018:F1105" not in ids
+        assert prepared.evidence.general_knowledge == []
+        assert "GENEL:bagisiklik-0" not in prepared.evidence.allowed_citation_ids
+        assert "ön tanı" in prepared.history_answer
+        assert "2026-04-08" in prepared.history_answer
+        assert "F442" in prepared.history_answer
+        assert "kesin tanı" not in prepared.history_answer
+        assert "F499" not in prepared.history_answer
+        assert "F1105" not in prepared.history_answer
+    finally:
+        twin.close()
+
+
+def test_history_builder_drops_dictionary_chunks() -> None:
+    bundle = EvidenceBuilder().build(
+        case_id="oracle-pilot-018",
+        snapshot=None,
+        general_chunks=[
+            ScoredChunk(
+                id="bagisiklik-0",
+                text="Hastalık tanısı değildir.",
+                source="bagisiklik.md",
+                score=3.0,
+            )
+        ],
+        history_mode=True,
+        history_facts=[],
+        history_prefixes=("E0",),
+        history_status="MATCH",
+        history_concepts=(("40930008", "Hypothyroidism"),),
+    )
+    assert bundle.general_knowledge == []
+
+
+def test_deterministic_history_answer_does_not_call_the_model(tmp_path: Path) -> None:
+    from fastapi.testclient import TestClient
+
+    from medical_rag.main import create_app
+
+    bundle = AdaptedPatientBundle(
+        case_id="oracle-pilot-018",
+        subject_fingerprint="synthetic",
+        evaluated_at="2026-11-01T00:00:00+03:00",
+        exported_at="2026-11-01T00:00:00+03:00",
+        cco_as_of="2026-11-01T00:00:00+03:00",
+        export_scope="test",
+        has_structured_data=True,
+        total_rows=1,
+        value_fact_count=1,
+        missing_result_count=0,
+        families=["diagnosis"],
+        facts=[_fact(fact_alias="F442", source_index=442)],
+        glossary=[],
+        narrative_sections=[],
+    )
+    missing_package = tmp_path / "missing-package"
+    twin = DigitalTwinService(
+        db_path=tmp_path / "history-api.db",
+        cco_package_dir=missing_package,
+        snomed_package_dir=missing_package,
+        eager_load=True,
+    )
+    fake = FakeOllama(text="model yazmamalı", prompt_eval_count=12)
+    retriever = ScriptedRetriever(
+        [
+            ScoredChunk(
+                id="bagisiklik-0",
+                text="Hastalık tanısı değildir.",
+                source="bagisiklik.md",
+                score=4.0,
+            )
+        ]
+    )
+    try:
+        assert twin._repo is not None
+        twin._repo.ingest_bundle(bundle)
+        app = create_app(ollama=fake, twin=twin, retriever=retriever)
+        with TestClient(app) as client:
+            response = client.post(
+                "/v1/chat",
+                json={
+                    "question": "Geçmişimde tiroit hastalığı var mı?",
+                    "case_id": "oracle-pilot-018",
+                    "top_k": 3,
+                },
+            )
+        body = response.json()
+        assert response.status_code == 200
+        assert fake.calls == 0
+        assert body["intent"] == "clinical_history_search"
+        assert body["eval_count"] == 0
+        assert body["prompt_eval_count"] == 0
+        assert body["abstained"] is False
+        assert "F442" in body["answer"]
+        assert "ön tanı" in body["answer"]
+        assert "2026-04-08" in body["answer"]
+        assert "GENEL:bagisiklik-0" not in body["retrieved_chunk_ids"]
+        assert body["evidence_layers"]["general_knowledge"] == []
     finally:
         twin.close()

@@ -77,6 +77,7 @@ class RoutePlan:
     target_canonical_ids: list[str] = field(default_factory=list)
     linked_concepts: list[LinkedConcept] = field(default_factory=list)
     history_prefixes: tuple[str, ...] = ()
+    history_concepts: tuple[tuple[str, str], ...] = ()
 
 
 class IntentRouter:
@@ -130,6 +131,46 @@ class IntentRouter:
 
         is_personal_cue = bool(_PERSONAL_INTENT_RE.search(folded))
         history = parse_history_query(folded)
+        # #region agent log
+        try:
+            import json as _json
+            import time as _time
+
+            with open(
+                r"c:\Projects\medical-rag-local\.cursor\debug-36fe44.log",
+                "a",
+                encoding="utf-8",
+            ) as _fh:
+                _fh.write(
+                    _json.dumps(
+                        {
+                            "sessionId": "36fe44",
+                            "hypothesisId": "D",
+                            "location": "intent_router.py:route",
+                            "message": "concept linker vs history prefixes",
+                            "data": {
+                                "folded": folded,
+                                "concepts": [
+                                    {
+                                        "id": c.concept_id,
+                                        "term": c.preferred_term,
+                                        "phrase": c.matched_phrase,
+                                        "source": c.match_source,
+                                    }
+                                    for c in linked_concepts
+                                ],
+                                "historyActive": history.active,
+                                "historyPrefixes": list(history.code_prefixes),
+                            },
+                            "timestamp": int(_time.time() * 1000),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
 
         # Tamamen alakasız soruları (ör. hava durumu, kuantum kapısı) erken ele
         if (
@@ -185,4 +226,9 @@ class IntentRouter:
             target_canonical_ids=canonical_ids,
             linked_concepts=linked_concepts,
             history_prefixes=history.code_prefixes,
+            history_concepts=tuple(
+                (concept.concept_id, concept.label)
+                for concept in history.concepts
+                if concept.concept_id
+            ),
         )

@@ -189,9 +189,21 @@ _TR_CLINICAL_RULES: tuple[_TrLexiconRule, ...] = (
         ("lab", "medication", "diagnosis"),
     ),
     _TrLexiconRule(
-        re.compile(r"\bhipotiroid|\btiroid|\btsh\b"),
+        re.compile(r"\bhipotiroid|\btsh\b"),
         "hipotiroidi",
         "40930008",
+        ("lab", "medication", "diagnosis"),
+    ),
+    _TrLexiconRule(
+        re.compile(r"\bhipertiroid"),
+        "hipertiroidi",
+        "34486009",
+        ("lab", "medication", "diagnosis"),
+    ),
+    _TrLexiconRule(
+        re.compile(r"\btiroit|\btiroid"),
+        "tiroit bezi hastalığı",
+        "14304000",
         ("lab", "medication", "diagnosis"),
     ),
     _TrLexiconRule(

@@ -643,26 +643,83 @@ class PatientFactRepository:
         case_id: str,
         code_prefixes: tuple[str, ...] | list[str],
     ) -> list[AdaptedFact]:
-        """Her ICD kodunun en güncel aktif tanı satırı. Bölüm verilirse o bölümle sınırlıdır."""
-        rows = self.query_facts(
-            case_id,
-            families=["diagnosis"],
-            canonical_ids=["diagnosis.recorded-item"],
-            evaluation_status="success",
-            active_only=True,
-            include_details=True,
-        )
+        """Her ICD kodunun en güncel aktif tanı satırı.
+
+        Kod ön eki yoksa hiçbir satır dönmez. Boş ön ek, tüm tanıları seçmek
+        anlamına gelmez.
+        """
         prefixes = tuple(prefix.upper() for prefix in code_prefixes)
+        rows = (
+            self.query_facts(
+                case_id,
+                families=["diagnosis"],
+                canonical_ids=["diagnosis.recorded-item"],
+                evaluation_status="success",
+                active_only=True,
+                include_details=True,
+            )
+            if prefixes
+            else []
+        )
+        coded_rows = [
+            fact
+            for fact in rows
+            if (fact.code or "").strip()
+        ]
         chosen: list[AdaptedFact] = []
         seen: set[str] = set()
-        for fact in rows:
+        for fact in coded_rows:
             code = (fact.code or "").upper()
-            if not code or code in seen:
+            if code in seen:
                 continue
-            if prefixes and not code.startswith(prefixes):
+            if not prefixes or not code.startswith(prefixes):
                 continue
             seen.add(code)
             chosen.append(fact)
+        # #region agent log
+        try:
+            import json as _json
+            import time as _time
+
+            all_codes = []
+            seen_all: set[str] = set()
+            for fact in coded_rows:
+                code = (fact.code or "").upper()
+                if code in seen_all:
+                    continue
+                seen_all.add(code)
+                all_codes.append(code)
+            with open(
+                r"c:\Projects\medical-rag-local\.cursor\debug-36fe44.log",
+                "a",
+                encoding="utf-8",
+            ) as _fh:
+                _fh.write(
+                    _json.dumps(
+                        {
+                            "sessionId": "36fe44",
+                            "hypothesisId": "B",
+                            "location": "fact_repository.py:query_coded_history",
+                            "message": "coded history filter",
+                            "data": {
+                                "caseId": case_id,
+                                "prefixes": list(prefixes),
+                                "filterApplied": bool(prefixes),
+                                "distinctCodedCount": len(all_codes),
+                                "chosenCount": len(chosen),
+                                "chosenCodes": [fact.code for fact in chosen],
+                                "iCodes": [code for code in all_codes if code.startswith("I")],
+                                "e0Codes": [code for code in all_codes if code.startswith("E0")],
+                            },
+                            "timestamp": int(_time.time() * 1000),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         return chosen
 
     def query_same_day_context(

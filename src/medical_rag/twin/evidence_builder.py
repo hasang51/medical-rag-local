@@ -175,6 +175,8 @@ class EvidenceBuilder:
         history_mode: bool = False,
         history_facts: list[ResolvedFactView] | None = None,
         history_prefixes: tuple[str, ...] = (),
+        history_status: str = "NO_MATCH",
+        history_concepts: tuple[tuple[str, str], ...] = (),
     ) -> LayeredEvidenceBundle:
         cco_items: list[EvidenceItem] = []
         seen_citations: set[str] = set()
@@ -185,34 +187,66 @@ class EvidenceBuilder:
                 cco_items.append(item)
 
         if history_mode:
-            chapter = ", ".join(history_prefixes) if history_prefixes else "tüm kodlu tanılar"
-            _add_cco(
-                EvidenceItem(
-                    citation_id=f"CCO:{case_id}:HISTORY-SCOPE",
-                    layer="patient_cco",
-                    title="Kodlu geçmiş araması",
-                    summary=(
-                        f"Arama bölümü: {chapter}. "
-                        "Sonuç kodlu tanı satırlarıdır. Kesin tanı sayısı veya genel sözlük "
-                        "bu aramanın yokluk kanıtı değildir."
-                    ),
-                )
+            concept_text = ", ".join(
+                f"SNOMED {concept_id} {label}"
+                for concept_id, label in history_concepts
+                if concept_id
             )
-            if not history_facts:
+            chapter = ", ".join(history_prefixes) if history_prefixes else "yok"
+            if history_status == "UNRESOLVED":
                 _add_cco(
                     EvidenceItem(
-                        citation_id=f"CCO:{case_id}:HISTORY-EMPTY",
+                        citation_id=f"CCO:{case_id}:HISTORY-SCOPE",
                         layer="patient_cco",
-                        title="Eşleşen kodlu geçmiş yok",
+                        title="Kodlu geçmiş araması",
                         summary=(
-                            "Bu aramada eşleşen aktif kodlu tanı bulunmadı. "
-                            "Bu yokluk yalnız bu arama içindir."
+                            "Arama durumu: UNRESOLVED. "
+                            "Sorudaki kavram bir SNOMED kavramına ve ICD-10 bölümüne bağlanamadı. "
+                            "Kod bölümü olmadığı için tanı listesi getirilmedi."
+                        ),
+                    )
+                )
+                _add_cco(
+                    EvidenceItem(
+                        citation_id=f"CCO:{case_id}:HISTORY-UNRESOLVED",
+                        layer="patient_cco",
+                        title="Geçmiş kavramı çözülemedi",
+                        summary=(
+                            "Bu soru için kodlu arama yapılmadı. "
+                            "Çözülemeyen kavram, tanı yokluğu olarak okunamaz."
                         ),
                     )
                 )
             else:
-                for view in history_facts:
-                    _add_cco(_format_fact_view(view))
+                _add_cco(
+                    EvidenceItem(
+                        citation_id=f"CCO:{case_id}:HISTORY-SCOPE",
+                        layer="patient_cco",
+                        title="Kodlu geçmiş araması",
+                        summary=(
+                            f"Arama durumu: {history_status}. "
+                            f"Kavram: {concept_text or 'yok'}. "
+                            f"ICD-10 ön ekleri: {chapter}. "
+                            "Sonuç kodlu tanı satırlarıdır. Kesin tanı sayısı veya genel sözlük "
+                            "bu aramanın yokluk kanıtı değildir."
+                        ),
+                    )
+                )
+                if history_status == "NO_MATCH" or not history_facts:
+                    _add_cco(
+                        EvidenceItem(
+                            citation_id=f"CCO:{case_id}:HISTORY-EMPTY",
+                            layer="patient_cco",
+                            title="Eşleşen kodlu geçmiş yok",
+                            summary=(
+                                "Bu aramada eşleşen aktif kodlu tanı bulunmadı. "
+                                "Bu yokluk yalnız bu arama içindir."
+                            ),
+                        )
+                    )
+                else:
+                    for view in history_facts:
+                        _add_cco(_format_fact_view(view))
         elif snapshot is None:
             _add_cco(
                 EvidenceItem(

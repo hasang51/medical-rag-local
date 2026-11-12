@@ -261,6 +261,32 @@ async def chat(body: ChatRequest, request: Request) -> ChatResponse:
             intent=prepared.plan.intent,
         )
 
+    if prepared.history_answer:
+        decision = enforce_twin_contract(prepared.history_answer, allowed_ids)
+        latency_ms = (time.perf_counter() - started) * 1000
+        _log(
+            "chat",
+            status=200,
+            duration_ms=round(latency_ms, 1),
+            mode="twin",
+            intent=prepared.plan.intent,
+            abstained=decision.abstained,
+            citation_count=len(decision.citations),
+            eval_count=0,
+        )
+        return ChatResponse(
+            answer=decision.answer,
+            citations=decision.citations,
+            abstained=decision.abstained,
+            disclaimer=DISCLAIMER,
+            eval_count=0,
+            latency_ms=latency_ms,
+            retrieved_chunk_ids=allowed_ids,
+            case_id=body.case_id,
+            intent=prepared.plan.intent,
+            evidence_layers=layers_schema,
+        )
+
     try:
         completion = await request.app.state.ollama.chat(
             build_twin_messages(body.question, prepared.rendered_context),

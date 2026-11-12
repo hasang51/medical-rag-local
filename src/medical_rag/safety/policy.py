@@ -48,6 +48,23 @@ def enforce_twin_contract(answer: str, allowed_ids: list[str]) -> Decision:
     """Digital Twin yanıtında izinli katman alıntısını ve klinik rol sınırını doğrular."""
     folded = fold(answer)
     found = [cid for cid in allowed_ids if cid in answer]
-    if _TWIN_ROLE.search(folded) or not found:
+    role_blocked = bool(_TWIN_ROLE.search(folded))
+    history_turn = any("HISTORY-SCOPE" in cid for cid in allowed_ids)
+    cited_empty = any("HISTORY-EMPTY" in cid and cid in answer for cid in allowed_ids)
+    absence = any(
+        token in folded
+        for token in (
+            "bulunmamaktadır",
+            "bulunmuyor",
+            "saptanmamıştır",
+            "saptanmamistir",
+            "saptanmamakta",
+            "yoktur",
+            "yer almıyor",
+            "yer almiyor",
+        )
+    )
+    unsupported_absence = history_turn and absence and not cited_empty
+    if role_blocked or not found or unsupported_absence:
         return abstain()
     return Decision(answer=answer.strip(), citations=found, abstained=False)

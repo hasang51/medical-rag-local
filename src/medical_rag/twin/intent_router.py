@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 from medical_rag.rag.text import fold
 from medical_rag.safety.emergency import EmergencyDecision, check_emergency
-from medical_rag.terminology.concept_linker import ConceptLinker, LinkedConcept
+from medical_rag.twin.clinical_history import parse_history_query
 
 _FAMILY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("sleep", re.compile(r"\buyku|uyudum|uyuyam|gece\s+uy|rem\b|derin\s+uyku|yatış")),
@@ -76,6 +76,7 @@ class RoutePlan:
     target_families: list[str] = field(default_factory=list)
     target_canonical_ids: list[str] = field(default_factory=list)
     linked_concepts: list[LinkedConcept] = field(default_factory=list)
+    history_prefixes: tuple[str, ...] = ()
 
 
 class IntentRouter:
@@ -128,10 +129,12 @@ class IntentRouter:
                         matched_families.append(fam)
 
         is_personal_cue = bool(_PERSONAL_INTENT_RE.search(folded))
+        history = parse_history_query(folded)
 
         # Tamamen alakasız soruları (ör. hava durumu, kuantum kapısı) erken ele
         if (
-            not matched_families
+            not history.active
+            and not matched_families
             and not linked_concepts
             and not is_personal_cue
             and not has_corpus_hits
@@ -160,7 +163,12 @@ class IntentRouter:
                 if extra not in normalized_families:
                     normalized_families.append(extra)
 
-        if linked_concepts and (normalized_families or is_personal_cue):
+        if history.active:
+            intent = "clinical_history_search"
+            for family in ("diagnosis", "visit", "imaging", "pathology"):
+                if family not in normalized_families:
+                    normalized_families.append(family)
+        elif linked_concepts and (normalized_families or is_personal_cue):
             intent = "patient_symptom_twin"
         elif normalized_families or is_personal_cue:
             intent = "patient_exact_query"
@@ -176,4 +184,5 @@ class IntentRouter:
             target_families=normalized_families,
             target_canonical_ids=canonical_ids,
             linked_concepts=linked_concepts,
+            history_prefixes=history.code_prefixes,
         )

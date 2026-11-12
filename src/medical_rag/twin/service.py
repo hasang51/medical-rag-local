@@ -103,6 +103,56 @@ class DigitalTwinService:
         )
         patient = self._repo.get_patient(case_id)
 
+        if plan.intent == "clinical_history_search" and patient is not None:
+            coded = []
+            related = []
+            if patient.has_structured_data:
+                coded = self._repo.query_coded_history(case_id, plan.history_prefixes)
+                days = {
+                    (fact.occurred_from or "")[:10]
+                    for fact in coded
+                    if fact.occurred_from
+                }
+                days.update(
+                    (fact.occurred_to or "")[:10] for fact in coded if fact.occurred_to
+                )
+                related = self._repo.query_same_day_context(case_id, days)
+            glossary = self._repo.get_glossary_map(case_id)
+            ref_dt = parse_iso_timestamp(patient.evaluated_at or patient.cco_as_of)
+            history_views: list[ResolvedFactView] = []
+            for fact in [*coded, *related]:
+                entry = glossary.get(fact.definition) or glossary.get(fact.canonical_id)
+                valid_until = parse_iso_timestamp(fact.valid_until) if fact.valid_until else None
+                history_views.append(
+                    ResolvedFactView(
+                        fact=fact,
+                        glossary_label=entry.label if entry else fact.canonical_id,
+                        glossary_description=entry.description if entry else "",
+                        is_point_event=(fact.occurred_from == fact.occurred_to),
+                        is_derived_window=is_derived_window_metric(fact.canonical_id),
+                        is_expired_at_reference=bool(
+                            ref_dt is not None and valid_until is not None and valid_until < ref_dt
+                        ),
+                    )
+                )
+            evidence = self._evidence_builder.build(
+                case_id=case_id,
+                snapshot=None,
+                linked_concepts=plan.linked_concepts,
+                general_chunks=general_hits,
+                history_mode=True,
+                history_facts=history_views,
+                history_prefixes=plan.history_prefixes,
+            )
+            rendered_context = evidence.render_prompt_context(max_chars=7500)
+            return PreparedTwinTurn(
+                plan=plan,
+                patient=patient,
+                snapshot=None,
+                evidence=evidence,
+                rendered_context=rendered_context,
+            )
+
         if plan.intent in {"emergency", "out_of_scope"} or patient is None:
             empty_bundle = self._evidence_builder.build(
                 case_id=case_id,

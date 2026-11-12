@@ -638,6 +638,65 @@ class PatientFactRepository:
             for r in rows
         ]
 
+    def query_coded_history(
+        self,
+        case_id: str,
+        code_prefixes: tuple[str, ...] | list[str],
+    ) -> list[AdaptedFact]:
+        """Her ICD kodunun en güncel aktif tanı satırı. Bölüm verilirse o bölümle sınırlıdır."""
+        rows = self.query_facts(
+            case_id,
+            families=["diagnosis"],
+            canonical_ids=["diagnosis.recorded-item"],
+            evaluation_status="success",
+            active_only=True,
+            include_details=True,
+        )
+        prefixes = tuple(prefix.upper() for prefix in code_prefixes)
+        chosen: list[AdaptedFact] = []
+        seen: set[str] = set()
+        for fact in rows:
+            code = (fact.code or "").upper()
+            if not code or code in seen:
+                continue
+            if prefixes and not code.startswith(prefixes):
+                continue
+            seen.add(code)
+            chosen.append(fact)
+        return chosen
+
+    def query_same_day_context(
+        self,
+        case_id: str,
+        days: set[str],
+        *,
+        limit: int = 8,
+    ) -> list[AdaptedFact]:
+        """Seçilen tanı günlerine düşen muayene, görüntüleme ve patoloji satırları."""
+        if not days:
+            return []
+        rows = self.query_facts(
+            case_id,
+            families=["visit", "imaging", "pathology"],
+            evaluation_status="success",
+            active_only=True,
+            include_details=False,
+        )
+        matched: list[AdaptedFact] = []
+        seen: set[str] = set()
+        for fact in rows:
+            day_from = (fact.occurred_from or "")[:10]
+            day_to = (fact.occurred_to or "")[:10]
+            if day_from not in days and day_to not in days:
+                continue
+            if fact.fact_alias in seen:
+                continue
+            seen.add(fact.fact_alias)
+            matched.append(fact)
+            if len(matched) >= limit:
+                break
+        return matched
+
     def list_active_canonical_ids(
         self,
         case_id: str,

@@ -172,6 +172,9 @@ class EvidenceBuilder:
         targeted_facts: list[ResolvedFactView] | None = None,
         linked_concepts: list[LinkedConcept] | None = None,
         general_chunks: list[ScoredChunk] | None = None,
+        history_mode: bool = False,
+        history_facts: list[ResolvedFactView] | None = None,
+        history_prefixes: tuple[str, ...] = (),
     ) -> LayeredEvidenceBundle:
         cco_items: list[EvidenceItem] = []
         seen_citations: set[str] = set()
@@ -181,7 +184,36 @@ class EvidenceBuilder:
                 seen_citations.add(item.citation_id)
                 cco_items.append(item)
 
-        if snapshot is None:
+        if history_mode:
+            chapter = ", ".join(history_prefixes) if history_prefixes else "tüm kodlu tanılar"
+            _add_cco(
+                EvidenceItem(
+                    citation_id=f"CCO:{case_id}:HISTORY-SCOPE",
+                    layer="patient_cco",
+                    title="Kodlu geçmiş araması",
+                    summary=(
+                        f"Arama bölümü: {chapter}. "
+                        "Sonuç kodlu tanı satırlarıdır. Kesin tanı sayısı veya genel sözlük "
+                        "bu aramanın yokluk kanıtı değildir."
+                    ),
+                )
+            )
+            if not history_facts:
+                _add_cco(
+                    EvidenceItem(
+                        citation_id=f"CCO:{case_id}:HISTORY-EMPTY",
+                        layer="patient_cco",
+                        title="Eşleşen kodlu geçmiş yok",
+                        summary=(
+                            "Bu aramada eşleşen aktif kodlu tanı bulunmadı. "
+                            "Bu yokluk yalnız bu arama içindir."
+                        ),
+                    )
+                )
+            else:
+                for view in history_facts:
+                    _add_cco(_format_fact_view(view))
+        elif snapshot is None:
             _add_cco(
                 EvidenceItem(
                     citation_id=f"CCO:{case_id}:NOT-FOUND",

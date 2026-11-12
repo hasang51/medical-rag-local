@@ -3,6 +3,8 @@ import type {
   ChatRequest,
   ChatResponse,
   HealthResponse,
+  PatientProfileItem,
+  PatientsListResponse,
 } from "@/types/api";
 
 // FastAPI request_timeout_seconds=180.0 sn olduğundan istemci zaman aşımı 185 saniyedir.
@@ -96,6 +98,23 @@ export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse>
   }
 }
 
+export async function fetchPatients(signal?: AbortSignal): Promise<PatientProfileItem[]> {
+  try {
+    const response = await fetch("/v1/patients", {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      signal,
+    });
+    if (!response.ok) {
+      return [];
+    }
+    const payload = (await response.json()) as PatientsListResponse;
+    return Array.isArray(payload.patients) ? payload.patients : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function postChat(
   request: ChatRequest,
   externalSignal?: AbortSignal
@@ -111,16 +130,21 @@ export async function postChat(
   externalSignal?.addEventListener("abort", onExternalAbort, { once: true });
 
   try {
+    const payloadBody: Record<string, unknown> = {
+      question: request.question,
+      top_k: request.top_k,
+    };
+    if (request.case_id) {
+      payloadBody.case_id = request.case_id;
+    }
+
     const response = await fetch("/v1/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify({
-        question: request.question,
-        top_k: request.top_k,
-      }),
+      body: JSON.stringify(payloadBody),
       signal: controller.signal,
     });
 

@@ -8,11 +8,19 @@ wheels/
 
 # Virtual environments
 .venv
+.venv_backup
 
 # Yerel gizler ve çalışma çıktıları
 .env
 data/runtime/
+*.db
+*.sqlite
+*.sqlite3
 .pytest_cache/
+
+# Kişisel sağlık verisi ve lisanslı terminoloji paketleri Git dışında tutulur
+base_cco_reading_tables_colab_*/
+SnomedCT_IPS_Terminology_2024/
 
 # IDE ve yerel ajan notları
 .cursor/

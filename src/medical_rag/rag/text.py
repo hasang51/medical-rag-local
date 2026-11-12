@@ -72,3 +72,16 @@ def fold(text: str) -> str:
 def tokenize(text: str) -> list[str]:
     folded = fold(text)
     return [token for token in _TOKEN.findall(folded) if token not in _STOP and len(token) > 1]
+
+
+_CLINICAL_SINGLE_TOKENS = frozenset({"0", "1", "2", "3", "4", "a", "b", "c", "d", "e", "k"})
+
+
+def tokenize_clinical(text: str) -> list[str]:
+    """G5 klinik yönlendirme için tek karakterli tıbbi belirteçleri (Tip 1/2, D vitamini, kan grubu) korur."""
+    folded = fold(text)
+    return [
+        token
+        for token in _TOKEN.findall(folded)
+        if token not in _STOP and (len(token) > 1 or token in _CLINICAL_SINGLE_TOKENS)
+    ]

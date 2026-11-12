@@ -1,11 +1,15 @@
-import { Activity, Stethoscope, Trash2 } from "lucide-react";
+import { Activity, Stethoscope, Trash2, UserRound } from "lucide-react";
 import { ModelStatusBadge } from "@/components/status/ModelStatusBadge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { HealthState } from "@/hooks/useHealthStatus";
+import type { PatientProfileItem } from "@/types/api";
 
 interface HeaderBarProps {
   health: HealthState;
+  patients: PatientProfileItem[];
+  selectedCaseId: string | null;
+  onSelectCaseId: (caseId: string | null) => void;
   showDiagnostics: boolean;
   onToggleDiagnostics: (next: boolean) => void;
   turnCount: number;
@@ -15,6 +19,9 @@ interface HeaderBarProps {
 
 export function HeaderBar({
   health,
+  patients,
+  selectedCaseId,
+  onSelectCaseId,
   showDiagnostics,
   onToggleDiagnostics,
   turnCount,
@@ -31,19 +38,46 @@ export function HeaderBar({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base font-semibold tracking-tight text-slate-900 sm:text-lg">
-                Medical RAG
+                Medical Digital Twin G5
               </h1>
               <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
-                Klinik Sözlük
+                {selectedCaseId ? `Profil: ${selectedCaseId}` : "Klinik Sözlük"}
               </span>
             </div>
             <p className="text-xs text-slate-500">
-              Kaynağa bağlı Türkçe tıbbi kavram doğrulama arayüzü
+              {selectedCaseId
+                ? "CCO Kişisel Kayıtlar (SQLite) + SNOMED CT IPS + Genel Sözlük"
+                : "Kaynağa bağlı Türkçe tıbbi kavram doğrulama arayüzü"}
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+          <label
+            htmlFor="patient-profile-select"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/90 px-2.5 py-1.5 text-xs font-medium text-slate-700"
+          >
+            <UserRound className="h-3.5 w-3.5 text-teal-700 shrink-0" />
+            <select
+              id="patient-profile-select"
+              value={selectedCaseId ?? ""}
+              disabled={disabled}
+              onChange={(e) => onSelectCaseId(e.target.value ? e.target.value : null)}
+              className="bg-transparent font-medium text-slate-800 outline-none cursor-pointer disabled:opacity-60"
+              aria-label="Çalışma modu veya hasta profili seçin"
+            >
+              <option value="">Genel Sözlük</option>
+              {patients.length === 0 && selectedCaseId && (
+                <option value={selectedCaseId}>{selectedCaseId} (yükleniyor)</option>
+              )}
+              {patients.map((patient) => (
+                <option key={patient.case_id} value={patient.case_id}>
+                  {patient.case_id} ({patient.total_rows} kayıt)
+                </option>
+              ))}
+            </select>
+          </label>
+
           <ModelStatusBadge health={health} />
 
           <label

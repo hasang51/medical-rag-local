@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { CheckCircle2, MessageSquareText, RotateCcw, ShieldAlert } from "lucide-react";
+import {
+  AlertOctagon,
+  CheckCircle2,
+  MessageSquareText,
+  RotateCcw,
+  ShieldAlert,
+} from "lucide-react";
 import { AbstentionCallout } from "@/components/chat/AbstentionCallout";
 import { DiagnosticsPanel } from "@/components/chat/DiagnosticsPanel";
 import { ErrorStateCard } from "@/components/chat/ErrorStateCard";
@@ -16,7 +22,7 @@ interface QueryTurnCardProps {
   turn: SessionTurn;
   turnNumber: number;
   showDiagnostics: boolean;
-  onRetryOrReuse: (question: string, topK: number) => void;
+  onRetryOrReuse: (question: string, topK: number, caseId?: string | null) => void;
   isSubmitting: boolean;
 }
 
@@ -47,8 +53,14 @@ export function QueryTurnCard({
     setEvidenceOpen(true);
   };
 
+  const isEmergency = Boolean(response?.emergency);
+
   return (
-    <Card className="overflow-hidden transition-colors">
+    <Card
+      className={`overflow-hidden transition-colors ${
+        isEmergency ? "border-rose-300 ring-1 ring-rose-200" : ""
+      }`}
+    >
       <CardHeader className="pb-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
@@ -57,19 +69,30 @@ export function QueryTurnCard({
               Sorgu #{turnNumber}
             </span>
             {formattedTime && <span>• {formattedTime}</span>}
+            {request.case_id && (
+              <span className="rounded bg-teal-50 border border-teal-200 px-1.5 py-0.5 font-mono text-[11px] font-medium text-teal-900">
+                {request.case_id}
+              </span>
+            )}
             <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-600">
               top_k={request.top_k}
             </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
-            {response && !response.abstained && (
+            {response && isEmergency && (
+              <Badge variant="danger">
+                <AlertOctagon className="h-3 w-3" />
+                <span>112 Acil Durum Kapısı • Model Çağrılmadı</span>
+              </Badge>
+            )}
+            {response && !isEmergency && !response.abstained && (
               <Badge variant="success">
                 <CheckCircle2 className="h-3 w-3" />
                 <span>Kaynak Doğrulandı ({response.citations.length})</span>
               </Badge>
             )}
-            {response && response.abstained && (
+            {response && !isEmergency && response.abstained && (
               <Badge variant="warning">Çekimser Yanıt</Badge>
             )}
             {response && (
@@ -92,14 +115,24 @@ export function QueryTurnCard({
           <ErrorStateCard
             error={error}
             request={request}
-            onRetry={onRetryOrReuse}
+            onRetry={(q, k) => onRetryOrReuse(q, k, request.case_id)}
             disabled={isSubmitting}
           />
         )}
 
         {response && (
           <>
-            {response.abstained ? (
+            {isEmergency ? (
+              <div
+                role="alert"
+                className="rounded-xl border border-rose-300 bg-rose-50/90 px-4 py-3.5 text-rose-950"
+              >
+                <div className="flex items-start gap-2.5">
+                  <AlertOctagon className="mt-0.5 h-5 w-5 shrink-0 text-rose-700" />
+                  <p className="text-sm font-medium leading-relaxed">{response.answer}</p>
+                </div>
+              </div>
+            ) : response.abstained ? (
               <AbstentionCallout response={response} />
             ) : (
               <div className="rounded-xl border border-slate-100 bg-slate-50/40 px-4 py-3.5">
@@ -114,6 +147,7 @@ export function QueryTurnCard({
             <EvidenceAccordion
               citations={response.citations}
               retrievedChunkIds={response.retrieved_chunk_ids}
+              evidenceLayers={response.evidence_layers}
               open={evidenceOpen}
               onOpenChange={(next) => {
                 setEvidenceOpen(next);
@@ -138,7 +172,7 @@ export function QueryTurnCard({
                 variant="ghost"
                 size="sm"
                 disabled={isSubmitting}
-                onClick={() => onRetryOrReuse(request.question, request.top_k)}
+                onClick={() => onRetryOrReuse(request.question, request.top_k, request.case_id)}
                 className="h-7 px-2 text-xs text-slate-500 hover:text-slate-800"
                 title="Bu soruyu giriş alanına kopyala veya tekrar gönder"
               >

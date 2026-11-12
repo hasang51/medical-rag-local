@@ -6,7 +6,7 @@ interface FormattedAnswerProps {
   onCitationClick?: (chunkId: string) => void;
 }
 
-const CITATION_TOKEN_REGEX = /(\[[a-z0-9-]+\])/gi;
+const CITATION_TOKEN_REGEX = /(\[[a-z0-9:-]+\])/gi;
 
 export function FormattedAnswer({
   answer,

@@ -6,6 +6,19 @@
 export interface ChatRequest {
   question: string;
   top_k: number;
+  case_id?: string | null;
+}
+
+export interface EvidenceLayerItem {
+  citation_id: string;
+  layer: "patient_cco" | "snomed_terminology" | "general_knowledge" | string;
+  title: string;
+}
+
+export interface EvidenceLayers {
+  patient_cco: EvidenceLayerItem[];
+  snomed_terminology: EvidenceLayerItem[];
+  general_knowledge: EvidenceLayerItem[];
 }
 
 export interface ChatResponse {
@@ -22,6 +35,25 @@ export interface ChatResponse {
   load_duration_ns: number;
   prompt_eval_count: number;
   prompt_eval_duration_ns: number;
+  case_id?: string | null;
+  intent?: string;
+  emergency?: boolean;
+  emergency_category?: string | null;
+  evidence_layers?: EvidenceLayers;
+}
+
+export interface PatientProfileItem {
+  case_id: string;
+  evaluated_at: string;
+  has_structured_data: boolean;
+  total_rows: number;
+  value_fact_count: number;
+  missing_result_count: number;
+  families: string[];
+}
+
+export interface PatientsListResponse {
+  patients: PatientProfileItem[];
 }
 
 export interface HealthResponse {

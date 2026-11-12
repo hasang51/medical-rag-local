@@ -12,6 +12,7 @@ from medical_rag.config import Settings
 from medical_rag.llm.ollama_client import OllamaClient
 from medical_rag.rag.chunker import load_chunks
 from medical_rag.rag.retriever import Bm25Retriever, Retriever
+from medical_rag.twin.service import DigitalTwinService
 
 logger = logging.getLogger("medical_rag")
 
@@ -27,6 +28,7 @@ def create_app(
     settings: Settings | None = None,
     retriever: Retriever | None = None,
     ollama: OllamaClient | None = None,
+    twin: DigitalTwinService | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
     # İstemci yaşam döngüsünden önce de hazır olsun. Aksi halde ilk istek
@@ -36,12 +38,23 @@ def create_app(
         http = httpx.AsyncClient()
         ollama = OllamaClient(settings, http)
 
+    owns_twin = twin is None
+    if twin is None:
+        twin = DigitalTwinService(
+            db_path=settings.g5_db_path,
+            cco_package_dir=settings.cco_package_dir,
+            snomed_package_dir=settings.snomed_package_dir,
+            eager_load=False,
+        )
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         configure_logging()
         try:
             yield
         finally:
+            if owns_twin and app.state.twin is not None:
+                app.state.twin.close()
             client = app.state.http
             if client is not None:
                 await client.aclose()
@@ -50,6 +63,7 @@ def create_app(
     app.state.settings = settings
     app.state.http = http
     app.state.ollama = ollama
+    app.state.twin = twin
     if retriever is None:
         chunks = load_chunks(settings.corpus_dir, settings.chunk_size, settings.chunk_overlap)
         retriever = Bm25Retriever(chunks, settings.bm25_score_threshold)

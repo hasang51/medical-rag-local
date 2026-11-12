@@ -57,6 +57,24 @@ class Settings(BaseSettings):
     questions_path: Path = Field(default_factory=lambda: ROOT / "data" / "eval" / "questions.json")
     runtime_dir: Path = Field(default_factory=lambda: ROOT / "data" / "runtime")
 
+    # G5 Digital Twin veri yolları ve bağlam bütçesi (baseline num_ctx=2048 korunur)
+    cco_package_dir: Path = Field(
+        default_factory=lambda: ROOT
+        / "base_cco_reading_tables_colab_20261027-20261112T081149Z-1-001"
+        / "base_cco_reading_tables_colab_20261027"
+        / "package"
+    )
+    snomed_package_dir: Path = Field(
+        default_factory=lambda: ROOT
+        / "SnomedCT_IPS_Terminology_2024"
+        / "SnomedCT_IPSTerminologyRelease_PRODUCTION_20241216T120000Z"
+    )
+    g5_db_path: Path = Field(
+        default_factory=lambda: ROOT / "data" / "runtime" / "g5_digital_twin.db"
+    )
+    twin_num_ctx: int = 4096
+    twin_num_predict: int = 384
+
     @model_validator(mode="after")
     def ollama_stays_on_loopback(self) -> "Settings":
         host = urlparse(self.ollama_base_url).hostname

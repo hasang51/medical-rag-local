@@ -66,16 +66,19 @@ class OllamaClient:
         messages: list[dict[str, str]],
         *,
         num_predict: int | None = None,
+        num_ctx: int | None = None,
     ) -> Completion:
         async with self._lock:
-            return await self._chat_unlocked(messages, num_predict)
+            return await self._chat_unlocked(messages, num_predict, num_ctx)
 
     async def _chat_unlocked(
         self,
         messages: list[dict[str, str]],
         num_predict: int | None,
+        num_ctx: int | None,
     ) -> Completion:
         settings = self._settings
+        effective_num_ctx = settings.num_ctx if num_ctx is None else num_ctx
         payload = {
             "model": settings.model,
             "messages": messages,
@@ -83,7 +86,7 @@ class OllamaClient:
             "think": settings.think,
             "keep_alive": settings.keep_alive,
             "options": {
-                "num_ctx": settings.num_ctx,
+                "num_ctx": effective_num_ctx,
                 "temperature": settings.temperature,
                 "top_p": settings.top_p,
                 "top_k": settings.top_k,
@@ -108,7 +111,7 @@ class OllamaClient:
         return Completion(
             text=str(message.get("content") or ""),
             model=str(body.get("model") or settings.model),
-            num_ctx=settings.num_ctx,
+            num_ctx=effective_num_ctx,
             eval_count=int(body.get("eval_count") or 0),
             eval_duration_ns=int(body.get("eval_duration") or 0),
             total_duration_ns=int(body.get("total_duration") or 0),

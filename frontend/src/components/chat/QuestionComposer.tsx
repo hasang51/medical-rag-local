@@ -12,6 +12,7 @@ interface QuestionComposerProps {
   onTopKChange: (topK: number) => void;
   onSubmit: (question: string, topK: number) => void;
   isSubmitting: boolean;
+  selectedCaseId?: string | null;
 }
 
 export function QuestionComposer({
@@ -21,6 +22,7 @@ export function QuestionComposer({
   onTopKChange,
   onSubmit,
   isSubmitting,
+  selectedCaseId = null,
 }: QuestionComposerProps) {
   const [validationHint, setValidationHint] = useState<string | null>(null);
 
@@ -76,7 +78,11 @@ export function QuestionComposer({
           onKeyDown={handleKeyDown}
           disabled={isSubmitting}
           rows={2}
-          placeholder="Sentetik tıbbi sözlüğe Türkçe bir kavram sorusu yazın… (Örn: Sistolik ve diyastolik kan basıncı ne anlatır?)"
+          placeholder={
+            selectedCaseId
+              ? `${selectedCaseId} kaydına sorun: son uyku, HRV, baş ağrısı veya laboratuvar…`
+              : "Genel sözlüğe Türkçe bir kavram sorusu yazın… (Örn: Nabız nedir?)"
+          }
           aria-label="Tıbbi kavram sorusu"
           className="w-full resize-none bg-transparent px-1.5 py-1 text-sm leading-relaxed text-slate-900 placeholder:text-slate-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
         />
@@ -92,7 +98,7 @@ export function QuestionComposer({
             <div className="flex items-center gap-1.5">
               <SlidersHorizontal className="h-3.5 w-3.5 text-slate-400" />
               <label htmlFor="top-k-select" className="font-medium text-slate-600">
-                BM25 top_k:
+                {selectedCaseId ? "Kanıt adedi:" : "BM25 top_k:"}
               </label>
               <select
                 id="top-k-select"
@@ -111,7 +117,9 @@ export function QuestionComposer({
 
             <span className="hidden md:inline-flex items-center gap-1 text-[11px] text-slate-400">
               <Info className="h-3 w-3" />
-              Tek turlu sorgu: önceki sorular yeni isteğe aktarılmaz.
+              {selectedCaseId
+                ? "Digital Twin: CCO + SNOMED + genel sözlük. Önceki tur gönderilmez."
+                : "Genel sözlük turu. Önceki sorular yeni isteğe aktarılmaz."}
             </span>
           </div>
 

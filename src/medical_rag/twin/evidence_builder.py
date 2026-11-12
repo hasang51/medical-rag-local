@@ -383,7 +383,10 @@ class EvidenceBuilder:
             )
 
         general_items: list[EvidenceItem] = []
-        for chunk in general_chunks or []:
+        # Geçmiş tanı araması eğitim sözlüğünü kaynak saymaz. Bağışıklık gibi
+        # ortak kelimeler ("tanısı") kişisel tanının kanıtı değildir.
+        dictionary_chunks = [] if history_mode else (general_chunks or [])
+        for chunk in dictionary_chunks:
             general_items.append(
                 EvidenceItem(
                     citation_id=f"GENEL:{chunk.id}",

@@ -11,12 +11,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from medical_rag.rag.retriever import Retriever, ScoredChunk
+from medical_rag.rag.text import fold
 from medical_rag.terminology.concept_linker import ConceptLinker
 from medical_rag.terminology.snomed_importer import SnomedImporter
 from medical_rag.twin.clinical_history import (
     HistoryQuery,
     classify_history_search,
     compose_coded_history_answer,
+    parse_history_query,
+    select_supporting_facts,
 )
 from medical_rag.twin.evidence_builder import EvidenceBuilder, LayeredEvidenceBundle
 from medical_rag.twin.fact_repository import PatientFactRepository, PatientSummary
@@ -112,17 +115,22 @@ class DigitalTwinService:
         if plan.intent == "clinical_history_search" and patient is not None:
             coded = []
             related = []
+            parsed_history = parse_history_query(fold(question))
             if patient.has_structured_data and plan.history_prefixes:
                 coded = self._repo.query_coded_history(case_id, plan.history_prefixes)
-                days = {
-                    (fact.occurred_from or "")[:10]
-                    for fact in coded
-                    if fact.occurred_from
-                }
-                days.update(
-                    (fact.occurred_to or "")[:10] for fact in coded if fact.occurred_to
-                )
-                related = self._repo.query_same_day_context(case_id, days)
+                if coded:
+                    candidates = self._repo.query_facts(
+                        case_id,
+                        families=["visit", "imaging", "pathology", "lab", "medication"],
+                        evaluation_status="success",
+                        active_only=True,
+                        include_details=False,
+                    )
+                    related = select_supporting_facts(
+                        candidates,
+                        parsed_history.concepts,
+                        coded_facts=coded,
+                    )
             glossary = self._repo.get_glossary_map(case_id)
             ref_dt = parse_iso_timestamp(patient.evaluated_at or patient.cco_as_of)
             history_views: list[ResolvedFactView] = []
@@ -149,91 +157,14 @@ class DigitalTwinService:
                 case_id=case_id,
                 snapshot=None,
                 linked_concepts=plan.linked_concepts,
-                general_chunks=general_hits,
+                general_chunks=[],
                 history_mode=True,
                 history_facts=history_views,
                 history_prefixes=plan.history_prefixes,
                 history_status=history_status,
                 history_concepts=plan.history_concepts,
             )
-            # #region agent log
-            try:
-                import json as _json
-                import time as _time
-
-                with open(
-                    r"c:\Projects\medical-rag-local\.cursor\debug-36fe44.log",
-                    "a",
-                    encoding="utf-8",
-                ) as _fh:
-                    _fh.write(
-                        _json.dumps(
-                            {
-                                "sessionId": "36fe44",
-                                "hypothesisId": "C",
-                                "location": "service.py:prepare_turn",
-                                "message": "history evidence composition",
-                                "data": {
-                                    "caseId": case_id,
-                                    "question": question,
-                                    "prefixes": list(plan.history_prefixes),
-                                    "codedCount": len(coded),
-                                    "relatedCount": len(related),
-                                    "historyViewCount": len(history_views),
-                                    "ccoCitationCount": len(evidence.patient_cco),
-                                    "ccoCitations": [item.citation_id for item in evidence.patient_cco],
-                                    "families": [
-                                        fact.family for fact in [*coded, *related]
-                                    ],
-                                },
-                                "timestamp": int(_time.time() * 1000),
-                            },
-                            ensure_ascii=False,
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             rendered_context = evidence.render_prompt_context(max_chars=7500)
-            # #region agent log
-            try:
-                import json as _json
-                import time as _time
-
-                marker = "F442"
-                idx = rendered_context.find(marker)
-                excerpt = rendered_context[max(0, idx - 80) : idx + 700] if idx >= 0 else ""
-                with open(
-                    r"c:\Projects\medical-rag-local\.cursor\debug-36fe44.log",
-                    "a",
-                    encoding="utf-8",
-                ) as _fh:
-                    _fh.write(
-                        _json.dumps(
-                            {
-                                "sessionId": "36fe44",
-                                "hypothesisId": "P",
-                                "location": "service.py:history_prompt",
-                                "message": "history prompt fact presence",
-                                "data": {
-                                    "caseId": case_id,
-                                    "promptChars": len(rendered_context),
-                                    "factInPrompt": marker in rendered_context,
-                                    "codeInPrompt": "E03" in rendered_context,
-                                    "preliminaryInPrompt": "preliminary" in rendered_context,
-                                    "visitDateInPrompt": "visitDate" in rendered_context,
-                                    "excerpt": excerpt,
-                                },
-                                "timestamp": int(_time.time() * 1000),
-                            },
-                            ensure_ascii=False,
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             return PreparedTwinTurn(
                 plan=plan,
                 patient=patient,
